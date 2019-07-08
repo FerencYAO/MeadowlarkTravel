@@ -6,6 +6,6 @@ var fortuneCookies = [
 	"Whenever possible, keep it simple.",
 ];
 exports.getFortune = function(){
-	var idx = Math.floor(Math.random()*fortunes.length);
+	var idx = Math.floor(Math.random()*fortuneCookies.length);
 	return fortuneCookies[idx];
 }
