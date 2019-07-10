@@ -1,6 +1,14 @@
 var express = require('express');
 var app = express();
-var handlebars = require('express3-handlebars').create({defaultLayout:'main'});
+var handlebars = require('express3-handlebars').create({defaultLayout:'main',helpers:
+{
+	section:function(name,options){
+		if(!this._sections) this._sections={};
+		this._sections[name] = options.fn(this);
+		return null;
+	}
+}
+});
 var fortune = require('./lib/fortune.js');
 function getWeatherData(){
 	return {
@@ -36,6 +44,7 @@ app.set('view engine','handlebars');
 app.set('port', process.env.PORT || 3000);
 app.disable('x-powered-by');
 
+app.use(require('body-parser')());
 app.use(express.static(__dirname+'/public'));
 app.use(function(req, res, next){
 	res.locals.showTests=app.get('env')!=='production' &&
@@ -63,13 +72,37 @@ app.get('/tours/hood-river',function(req,res){
 app.get('/tours/request-group-rate',function(req,res){
 	res.render('tours/request-group-rate');
 });
+app.get('/jquery-test', function(req,res){
+	res.render('jquery-test');
+});
+app.get('/nursery-rhyme',function(req,res){
+	res.render('nursery-rhyme');
+});
+app.get('/data/nursery-rhyme',function(req,res){
+	res.json({
+		animal:'squirrel',
+		bodyPart:'tail',
+		adjective:'bushy',
+		noun:'heck',
+	});
+});
+app.get('/newsletter',function(req,res){
+	res.render('newsletter',{csrf:'CSRF token goes here'});
+});
+app.post('/process',function(req,res){
+	console.log('Form (from querystring): '+req.query.form);
+	console.log('CSRF token (from hidden form field): '+req.body._csrf);
+	console.log('Name (from visible form field): '+req.body.name);
+	console.log('Email (from visible form field): '+req.body.email);
+	res.redirect(303, '/thank-you');
+});
 /* app.get('/headers', function(req,res){
 	res.set('Content-Type','text/plain');
 	var s = '';
 	for (var name in req.headers) s+= name + ': ' + req.headers[name] + '\n';
 	res.send(s);
-}); */
-
+});
+ */
 
 app.use(function(req, res, next){
 	res.status(404);
