@@ -164,7 +164,7 @@ function NewsletterSignup(){}
 NewsletterSignup.prototype.save = function(cb){
 	cb();
 };
-var VALID_EMAIL_REGEX = /^[a-zA-Z0-9,!#$%&'+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9]{0,61}[a-zA-Z0-9])?(?:\.[zA-Z0-9](?:[zA-Z0-9]{0,61}[a-zA-Z0-9])?)+$/;
+var VALID_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9]{0,61}[a-zA-Z0-9])?)+$/;
 app.post('/newsletter',function(req,res){
 	var name=req.body.name||'',email=req.body.email||'';
 	if(!email.match(VALID_EMAIL_REGEX)){
