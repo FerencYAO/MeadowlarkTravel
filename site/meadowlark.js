@@ -13,7 +13,38 @@ var fortune = require('./lib/fortune.js');
 var formidable = require('formidable');
 var jqupload = require('jquery-file-upload-middleware');
 var credentials = require('./credentials.js');
-
+/* var nodemailer = require('nodemailer');
+var mailTransport = nodemailer.createTransport('SMTP',{
+	host:"smtp.126.com",
+	secureConnection:true,
+	port:465,
+	secure:true,
+	auth:{
+		user:credentials.netease.user,
+		pass:credentials.netease.pass,
+	}
+}); */
+/* mailTransport.sendMail({
+	from:'"ferencyao@126.com',
+	to:'yao_junjun@sina.com',
+	subject:'Your Meadowlark Travel Tour',
+	text:'Thank you for booking your trip with Meadowlark Travel.'+
+		'We look forward to your visit!',
+},function(err){
+	if(err) console.error('Unable to send email: ' + err);
+}); */
+/* mailTransport.sendMail({
+	from:'"ferencyao@126.com',
+	to:'yao_junjun@sina.com',
+	subject:'Your Meadowlark Travel Tour',
+	html:'<h1>Meadowlark Travel</h1>\n<p>Thanks for book our trip with '+
+		'Meadownlark Travel. <b>We look forward to your visit!</b>',
+	text:'Thank you for booking your trip with Meadowlark Travel.'+
+		'We look forward to your visit!',
+},function(err){
+	if(err) console.error('Unable to send email: ' + err);
+});
+ */
 function getWeatherData(){
 	return {
 		locations:[
@@ -195,6 +226,132 @@ app.post('/newsletter',function(req,res){
 		return res.redirect(303,'/newsletter/archive');
 	});
 });
+
+var emailService = require('./lib/email.js')(credentials);
+var cartValidation = require('./lib/cartValidation.js');
+app.use(cartValidation.checkWaivers);
+app.use(cartValidation.checkGuestCounts);
+function Product(){}
+Product.find = function(conditions, fields, options, cb){
+	if(typeof conditions==='function'){
+		cb = conditions;
+		conditions = {};
+		fields = null;
+		options={};
+	}else if(typeof fields==='function'){
+		cb = fields;
+		fields=null;
+		options= {};
+	}else if(typeof options==='function'){
+		cb = options;
+		options={};
+	}
+	var products = [
+	{
+		name:'Hood River Tour',
+		slug:'hood-river',
+		category:'tour',
+		maximumGuests:15,
+		sku:723,
+	},
+	{
+		name:'Oregon Coast Tour',
+		slug:'oregon-coast',
+		category:'tour',
+		maximumGuests:10,
+		sku:446,
+	},
+	{
+		name:'Rock Climbing in Bend',
+		slug:'rock-climbing/bend',
+		category:'adventure',
+		requiresWaiver:true,
+		maximumGuests:4,
+		sku:944,
+	}];
+	cb(null, products.filter(function(p){
+		if(conditions.category && p.category!== conditions.category) return false;
+		if(conditions.slug && p.slug!==conditions.slug) return false;
+		if(isFinite(conditions.sku) && p.sku!== Number(conditions.sku)) return false;
+		return true;
+	}));
+};
+Product.findOne = function(conditions,fields,options,cb){
+	if(typeof conditions==='function'){
+		cb = conditions;
+		conditions={};
+		fields=null;
+		options={};
+	}else if(typeof fields==='function'){
+		cb = fields;
+		fields = null;
+		options= {};
+	}else if(typeof options==='function'){
+		cb = options;
+		options = {};
+	}
+	Product.find(conditions,fields,options,function(err, products){
+		cb(err,products && products.length ? products[0] : null);
+	});
+};
+app.get('/tours/:tour', function(req,res,next){
+	Product.findOne({category:'tour',slug:req.params.tour}, function(err, tour){
+		if(err) return next(err);
+		if(!tour) return next();
+		res.render('tour',{tour:tour});
+	});
+});
+app.get('/adventures/:subcat/:name',function(req,res,next){
+	Product.findOne({category:'adventure',slug:req.params.subcat + '/' + req.params.name}, function(err,adventure){
+		if(err) return next(err);
+		if(!adventure) return next();
+		res.render('adventure',{adventure:adventure});
+	});
+});
+app.post('/cart/add',function(req,res,next){
+	var cart = req.session.cart || (req.session.cart = {items:[]});
+	Product.findOne({sku:req.body.sku}, function(err,product){
+		if(err) return next(err);
+		if(!product) return next(new Error('Unknown product SKU: ' + req.body.sku));
+		cart.items.push({
+			product:product,
+			guests:req.body.guests || 0,
+		});
+		res.redirect(303, '/cart');
+	});
+});
+app.get('/cart', function(req,res,next){
+	var cart = req.session.cart;
+	if(!cart) next();
+	res.render('cart', {cart:cart});
+});
+app.get('/cart/checkout',function(req,res,next){
+	var cart = req.session.cart;
+	if(!cart) next();
+	res.render('cart-checkout');
+});
+app.get('/cart/thank-you', function(req,res){
+	res.render('cart-thank-you',{cart:req.session.cart});
+});
+app.get('/email/cart/thank-you', function(req,res){
+	res.render('email/cart-thank-you',{cart:req.session.cart, layout:null});
+});
+app.post('/cart/checkout',function(req,res){
+	var cart = req.session.cart;
+	if(!cart) next(new Error('Cart does not exist.'));
+	var name = req.body.name || '',email = req.body.email ||'';
+	if(!email.match(VALID_EMAIL_REGEX)) return res.next(new Error('Invalid email address.'));
+	cart.number = Math.random().toString().replace(/^0\.0*/, '');
+	cart.billing = {name:name, email:email,};
+	res.render('email/cart-thank-you', 
+		{layout:null, cart:cart},function(err,html){
+			if(err)console.log('error in email template');
+			emailService.send(cart.billing.email,'Thank you for booking your trip with Meadowlark Travel!',html);
+		}
+	);
+	res.render('cart-thank-you',{cart:cart});
+});
+
 
 app.use(function(req, res, next){
 	res.status(404);
