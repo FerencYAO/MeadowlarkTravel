@@ -78,7 +78,45 @@ app.engine('handlebars',handlebars.engine);
 app.set('view engine','handlebars');
 app.set('port', process.env.PORT || 3000);
 app.disable('x-powered-by');
-
+/* app.set('env', 'production') */
+switch(app.get('env')){
+	case 'development':
+		app.use(require('morgan')('dev'));
+		break;
+	case 'production':
+		app.use(require('express-logger')({
+			path:__dirname + '/log/requests.log'
+		}));
+		break;
+}
+app.use(function(req,res,next){
+	var domain = require('domain').create();
+	domain.on('error',function(err){
+		console.error('DOMAIN ERROR CAUGHT\n', err.stack);
+		try{
+			setTimeout(function(){
+				console.error('Failsafe shutdown.');
+				process.exit(1);
+			}, 5000);
+			var worker = require('cluster').worker;
+			if(worker) worker.disconnect();
+			server.close();
+			try{
+				next(err);
+			}catch(err){
+				console.error('Express error mechanism failed.\n', err.stack);
+				res.statusCode = 500;
+				res.setHeader('content-type', 'text/plain');
+				res.end('Server error.');
+			}
+		}catch(err){
+			console.error('Unable to send 500 response.\n', err.stack);
+		}
+	});
+	domain.add(req);
+	domain.add(res);
+	domain.run(next);
+});
 app.use(require('body-parser')());
 app.use(express.static(__dirname+'/public'));
 app.use(function(req, res, next){
@@ -352,6 +390,11 @@ app.post('/cart/checkout',function(req,res){
 	res.render('cart-thank-you',{cart:cart});
 });
 
+/* app.get('/epic-fail', function(req,res){
+	process.nextTick(function(){
+		throw new Error('Kaboom!');
+	});
+}); */
 
 app.use(function(req, res, next){
 	res.status(404);
@@ -363,6 +406,19 @@ app.use(function(err,req,res,next){
 	res.render('500');
 });
 
-app.listen(app.get('port'),function(){
+function startServer(){
+	app.listen(app.get('port'),function(){
+		console.log('Express started in ' + app.get('env') + 
+			' mode on http://localhost:' + app.get('port') +
+			'; press Ctrl-C to terminate.');
+	});
+}
+if(require.main === module){
+	startServer();
+}else {
+	module.exports = startServer;
+}
+/* app.listen(app.get('port'),function(){
 	console.log('Express started on http://localhost:' + app.get('port') + '; press Ctrl-C to terminate.');
 });
+ */
