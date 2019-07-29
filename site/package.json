@@ -29,7 +29,9 @@
     "jquery-file-upload-middleware": "^0.1.2",
     "loadtest": "^0.2.11",
     "morgan": "^1.1.1",
-    "nodemailer": "^0.6.5"
+    "mysql": "^2.5.4",
+    "nodemailer": "^0.6.5",
+    "sequelize": "^2.0.0-rc7"
   },
   "devDependencies": {
     "chai": "^1.9.1",
