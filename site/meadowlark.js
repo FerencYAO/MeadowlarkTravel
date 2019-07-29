@@ -44,7 +44,35 @@ var mailTransport = nodemailer.createTransport('SMTP',{
 },function(err){
 	if(err) console.error('Unable to send email: ' + err);
 });
- */
+ */	
+
+app.engine('handlebars',handlebars.engine);
+app.set('view engine','handlebars');
+app.set('port', process.env.PORT || 3000);
+app.disable('x-powered-by');
+/* app.set('env', 'production') */
+switch(app.get('env')){
+	case 'development':
+		app.use(require('morgan')('dev'));
+		break;
+	case 'production':
+		app.use(require('express-logger')({
+			path:__dirname + '/log/requests.log'
+		}));
+		break;
+}
+var mongoose = require('mongoose');
+switch(app.get('env')){
+	case 'development':
+		mongoose.connect(credentials.mongo.development.connectionString);
+		
+		break;
+	case 'production':
+		mongoose.connect(credentials.mongo.production.connectionString);
+		break;
+	default:
+		throw new Error('Unknown execution environment: ' + app.get('env'));
+}
 function getWeatherData(){
 	return {
 		locations:[
@@ -72,23 +100,57 @@ function getWeatherData(){
 		]
 	}
 };
-		
-
-app.engine('handlebars',handlebars.engine);
-app.set('view engine','handlebars');
-app.set('port', process.env.PORT || 3000);
-app.disable('x-powered-by');
-/* app.set('env', 'production') */
-switch(app.get('env')){
-	case 'development':
-		app.use(require('morgan')('dev'));
-		break;
-	case 'production':
-		app.use(require('express-logger')({
-			path:__dirname + '/log/requests.log'
-		}));
-		break;
-}
+var Vacation = require('./models/vacation.js');
+var VacationInSeasonListener = require('./models/vacationInSeasonListener.js');
+Vacation.find(function(err, vacations){
+	if(vacations.length) return;
+	new Vacation({
+		name:'Hood River Day Trip',
+		slug:'hood-river-day-trip',
+		category:'Day Trip',
+		sku:'HR199',
+		description:'Spend a day sailing on the Columbia and ' +
+			'enjoying craft beers in Hood River!',
+		priceInCents:9995,
+		tags:['day trip','hood river','sailing','windsurfing','breweries'],
+		inSeason:true,
+		maximumGuests:16,
+		available:true,
+		packagesSold:0,
+	}).save();
+	new Vacation({
+		name:'Oregon Coase Getaway',
+		slug:'oregon-coase-getaway',
+		category:'Weekend Getaway',
+		sku:'OC39',
+		description:'Enjoy the ocean air and quaint coastal towns!',
+		priceInCents:269995,
+		tags:['weekend getaway','oregon coast','beachcombing'],
+		inSeason:false,
+		maximumGuests:8,
+		available:true,
+		packagesSold:0,
+	}).save();
+	new Vacation({
+		name:'Rock Climbing in Bend',
+		slug:'rock-climbing-in-bend',
+		category:'Adventure',
+		sku:'B99',
+		description:'Experience the thrill of climbing in the high desert.',
+		priceInCents:289995,
+		tags:['weekend getaway','bend','high desert','rock climbing'],
+		inSeason:true,
+		requiresWaiver:true,
+		maximumGuests:4,
+		available:false,
+		packagesSold:0,
+		notes:'The tour guide is currently recovering from a skiing accident.',
+	}).save();
+});
+var MongoSessionStore = require('session-mongoose')(require('connect'));
+var sessionStore = new MongoSessionStore({url:credentials.mongo.connectionString});
+app.use(require('cookie-parser')(credentials.cookieSecret));
+app.use(require('express-session')({store:sessionStore}));
 app.use(function(req,res,next){
 	var domain = require('domain').create();
 	domain.on('error',function(err){
@@ -389,7 +451,69 @@ app.post('/cart/checkout',function(req,res){
 	);
 	res.render('cart-thank-you',{cart:cart});
 });
-
+app.get('/set-currency/:currency',function(req,res){
+	req.session.currency = req.params.currency;
+	return res.redirect(303, '/vacations');
+});
+function convertFromUSD(value,currency){
+	switch(currency){
+		case 'USD': return value *1;
+		case 'GBP': return value * 0.6;
+		case 'BTC': return value * 0.0023707918444761;
+		default:return NaN;
+	}
+}
+app.get('/vacations',function(req,res){
+	Vacation.find({available:true},function(err,vacations){
+		var currency = req.session.currency || 'USD';
+		var context = {
+			currency:currency,
+			vacations:vacations.map(function(vacation){
+				return {
+					sku:vacation.sku,
+					name:vacation.name,
+					description:vacation.description,
+					price:convertFromUSD(vacation.priceInCents/100, currency),
+					inSeason:vacation.inSeason,
+					qty:vacation.qty,
+				}
+			})
+		};
+		switch(currency){
+			case 'USD':context.currencyUSD = 'selected'; break;
+			case 'GBP':context.currencyGBP = 'selected'; break;
+			case 'BTC':context.currencyBTC = 'selected'; break;
+		}
+		res.render('vacations',context);
+	});
+});
+app.get('/notify-me-when-in-season',function(req,res){
+	res.render('notify-me-when-in-season',{sku:req.query.sku});
+});
+app.post('/notify-me-when-in-season',function(req,res){
+	VacationInSeasonListener.update(
+		{email:req.body.email},
+		{$push:{skus:req.body.sku}},
+		{upsert:true},
+		function(err){
+			if(err){
+				console.error(err.stack);
+				req.session.flash={
+					type:'danger',
+					intro:'Ooops!',
+					message:'There was an error processing your request.',
+				};
+				return res.redirect(303, '/vacations');
+			}
+			req.session.flash={
+				type:'success',
+				intro:'Thank you!',
+				message:'You will be notified when this vacation is in season.',
+			};
+			return res.redirect(303, '/vacations');
+		}
+	);
+});
 /* app.get('/epic-fail', function(req,res){
 	process.nextTick(function(){
 		throw new Error('Kaboom!');
