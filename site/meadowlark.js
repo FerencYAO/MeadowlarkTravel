@@ -214,23 +214,8 @@ app.use(function(req,res,next){
 	next();
 });
 
-app.get('/',function(req,res){
-	res.render('home');
-});
-app.get('/about',function(req,res){
-	res.render('about', {
-		fortune:fortune.getFortune(),
-		pageTestScript:'/qa/tests-about.js'
-	});
-});
 app.get('/tours/hood-river',function(req,res){
 	res.render('tours/hood-river');
-});
-app.get('/tours/request-group-rate',function(req,res){
-	res.render('tours/request-group-rate');
-});
-app.get('/jquery-test', function(req,res){
-	res.render('jquery-test');
 });
 /* app.get('/headers', function(req,res){
 	res.set('Content-Type','text/plain');
@@ -239,32 +224,8 @@ app.get('/jquery-test', function(req,res){
 	res.send(s);
 });
  */
-app.get('/nursery-rhyme',function(req,res){
-	res.render('nursery-rhyme');
-});
-app.get('/data/nursery-rhyme',function(req,res){
-	res.json({
-		animal:'squirrel',
-		bodyPart:'tail',
-		adjective:'bushy',
-		noun:'heck',
-	});
-});
-app.get('/thank-you',function(req,res){
-	res.render('thank-you');
-});
-app.get('/newsletter',function(req,res){
-	res.render('newsletter',{csrf:'CSRF token goes here'});
-});
 app.get('/newsletter2',function(req,res){
 	res.render('newsletter2',{csrf:'CSRF token goes here'});
-});
-app.get('/contest/vacation-photo',function(req,res){
-	var now = new Date();
-	res.render('contest/vacation-photo',{year:now.getFullYear(),month:now.getMonth()});
-});
-app.get('/newsletter/archive',function(req,res){
-	res.render('newsletter/archive');
 });
 app.post('/process',function(req,res){
 	console.log('Form (from querystring): '+req.query.form);
@@ -280,57 +241,8 @@ app.post('/process2',function(req,res){
 		res.redirect(303,'/thank-you');
 	}
 });
-app.post('/contest/vacation-photo/:year/:month',function(req,res){
-	var form = new formidable.IncomingForm();
-	form.parse(req,function(err,fields,files){
-		if(err)return res.redirect(303,'/error');
-		console.log('received fields:');
-		console.log(fields);
-		console.log('received files:');
-		console.log(files);
-		res.redirect(303,'/thank-you');
-	});
-});
-function NewsletterSignup(){}
-NewsletterSignup.prototype.save = function(cb){
-	cb();
-};
-var VALID_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9]{0,61}[a-zA-Z0-9])?)+$/;
-app.post('/newsletter',function(req,res){
-	var name=req.body.name||'',email=req.body.email||'';
-	if(!email.match(VALID_EMAIL_REGEX)){
-		if(req.xhr) return res.json({error:'Invalid name email address.'});
-		req.session.flash={
-			type:'danger',
-			intro:'Validation error!',
-			message:'The email address you entered was not valid.',
-		};
-		return res.redirect(303,'/newsletter/archive');
-	}
-	new NewsletterSignup({name:name,email:email}).save(function(err){
-		if(err){
-			if(req.xhr) return res.json({error:'Database error.'});
-			req.session.flash={
-				type:'danger',
-				intro:'Validation error!',
-				message:'The email address you entered was not valid.',
-			};
-			return res.redirect(303,'/newsletter/archive');
-		}
-		if(req.xhr) return res.json({success:true});
-		req.session.flash = {
-			type:'success',
-			intro:'Thank you!',
-			message:'You have now been signed up for the newsletter.',
-		};
-		return res.redirect(303,'/newsletter/archive');
-	});
-});
 
 var emailService = require('./lib/email.js')(credentials);
-var cartValidation = require('./lib/cartValidation.js');
-app.use(cartValidation.checkWaivers);
-app.use(cartValidation.checkGuestCounts);
 function Product(){}
 Product.find = function(conditions, fields, options, cb){
 	if(typeof conditions==='function'){
@@ -408,117 +320,8 @@ app.get('/adventures/:subcat/:name',function(req,res,next){
 		res.render('adventure',{adventure:adventure});
 	});
 });
-app.post('/cart/add',function(req,res,next){
-	var cart = req.session.cart || (req.session.cart = {items:[]});
-	Product.findOne({sku:req.body.sku}, function(err,product){
-		if(err) return next(err);
-		if(!product) return next(new Error('Unknown product SKU: ' + req.body.sku));
-		cart.items.push({
-			product:product,
-			guests:req.body.guests || 0,
-		});
-		res.redirect(303, '/cart');
-	});
-});
-app.get('/cart', function(req,res,next){
-	var cart = req.session.cart;
-	if(!cart) next();
-	res.render('cart', {cart:cart});
-});
-app.get('/cart/checkout',function(req,res,next){
-	var cart = req.session.cart;
-	if(!cart) next();
-	res.render('cart-checkout');
-});
-app.get('/cart/thank-you', function(req,res){
-	res.render('cart-thank-you',{cart:req.session.cart});
-});
-app.get('/email/cart/thank-you', function(req,res){
-	res.render('email/cart-thank-you',{cart:req.session.cart, layout:null});
-});
-app.post('/cart/checkout',function(req,res){
-	var cart = req.session.cart;
-	if(!cart) next(new Error('Cart does not exist.'));
-	var name = req.body.name || '',email = req.body.email ||'';
-	if(!email.match(VALID_EMAIL_REGEX)) return res.next(new Error('Invalid email address.'));
-	cart.number = Math.random().toString().replace(/^0\.0*/, '');
-	cart.billing = {name:name, email:email,};
-	res.render('email/cart-thank-you', 
-		{layout:null, cart:cart},function(err,html){
-			if(err)console.log('error in email template');
-			emailService.send(cart.billing.email,'Thank you for booking your trip with Meadowlark Travel!',html);
-		}
-	);
-	res.render('cart-thank-you',{cart:cart});
-});
-app.get('/set-currency/:currency',function(req,res){
-	req.session.currency = req.params.currency;
-	return res.redirect(303, '/vacations');
-});
-function convertFromUSD(value,currency){
-	switch(currency){
-		case 'USD': return value *1;
-		case 'GBP': return value * 0.6;
-		case 'BTC': return value * 0.0023707918444761;
-		default:return NaN;
-	}
-}
-app.get('/vacations',function(req,res){
-	Vacation.find({available:true},function(err,vacations){
-		var currency = req.session.currency || 'USD';
-		var context = {
-			currency:currency,
-			vacations:vacations.map(function(vacation){
-				return {
-					sku:vacation.sku,
-					name:vacation.name,
-					description:vacation.description,
-					price:convertFromUSD(vacation.priceInCents/100, currency),
-					inSeason:vacation.inSeason,
-					qty:vacation.qty,
-				}
-			})
-		};
-		switch(currency){
-			case 'USD':context.currencyUSD = 'selected'; break;
-			case 'GBP':context.currencyGBP = 'selected'; break;
-			case 'BTC':context.currencyBTC = 'selected'; break;
-		}
-		res.render('vacations',context);
-	});
-});
-app.get('/notify-me-when-in-season',function(req,res){
-	res.render('notify-me-when-in-season',{sku:req.query.sku});
-});
-app.post('/notify-me-when-in-season',function(req,res){
-	VacationInSeasonListener.update(
-		{email:req.body.email},
-		{$push:{skus:req.body.sku}},
-		{upsert:true},
-		function(err){
-			if(err){
-				console.error(err.stack);
-				req.session.flash={
-					type:'danger',
-					intro:'Ooops!',
-					message:'There was an error processing your request.',
-				};
-				return res.redirect(303, '/vacations');
-			}
-			req.session.flash={
-				type:'success',
-				intro:'Thank you!',
-				message:'You will be notified when this vacation is in season.',
-			};
-			return res.redirect(303, '/vacations');
-		}
-	);
-});
-/* app.get('/epic-fail', function(req,res){
-	process.nextTick(function(){
-		throw new Error('Kaboom!');
-	});
-}); */
+
+require('./routes.js')(app);
 
 app.use(function(req, res, next){
 	res.status(404);
