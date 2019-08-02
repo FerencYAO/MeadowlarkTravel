@@ -367,6 +367,28 @@ app.get('/api/attraction/:id',function(req,res){
 	});
 });
 
+app.get('/api/vacations',function(req,res){
+	Vacation.find(function(err,vacations){
+		if(err) return res.send(500, 'Error occurred: database errror.');
+		res.json(vacations.map(function(a){
+			return {
+				name:a.name,
+				id:a._id,
+				slug:a.slug,
+				category:a.category,
+				sku:a.sku,
+				description:a.description,
+				priceInCents:a.priceInCents,
+				tags:a.tags,
+				inSeason:a.inSeason,
+				available:a.available,
+				maximumGuests:a.maximumGuests,
+				notes:a.notes,
+				packagesSold:a.packagesSold,
+			}
+		}));
+	});
+});
 
 
 app.use(function(req, res, next){
