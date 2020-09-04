@@ -42,7 +42,7 @@
     "q": "^1.0.1",
     "redis": "^0.12.1",
     "restler": "^3.2.2",
-    "sequelize": "^2.0.0-rc7",
+    "sequelize": "^6.3.5",
     "session-mongoose": "^0.4.1",
     "vhost": "^2.0.0"
   },
